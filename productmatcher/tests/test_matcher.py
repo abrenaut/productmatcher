@@ -34,34 +34,16 @@ class TestMatcher(unittest.TestCase):
             {'currency': 'CAD', 'price': '399.99', 'manufacturer': 'Panasonic',
              'title': 'Panasonic Lumix DMC-TS3'}]
 
-    def normalize_inputs(self):
-        for product in self.products:
-            matcher.normalize_keys(product, ['model', 'manufacturer'])
-        for listing in self.listings:
-            matcher.normalize_keys(listing, ['title', 'manufacturer'])
-
     def test_normalize(self):
         normalized_str = matcher.normalize('Canon_PowerShot_SX130 IS')
-        self.assertEquals(normalized_str, 'canonpowershotsx130is')
-
-    def test_no_matching_product(self):
-        self.normalize_inputs()
-        matching_product = matcher.find_matching_product(
-            self.listings[0], self.products)
-        self.assertEquals(None, matching_product)
-
-    def test_matching_product(self):
-        self.normalize_inputs()
-        matching_product = matcher.find_matching_product(
-            self.listings[1], self.products)
-        self.assertEquals(self.products[0], matching_product)
+        self.assertEqual(normalized_str, 'canonpowershotsx130is')
 
     def test_match_products_with_listings(self):
         results = matcher.match_products_with_listings(
             self.products, self.listings)
-        self.assertEquals(
+        self.assertEqual(
             2, len(results['Canon_PowerShot_SX130_IS']['listings']))
-        self.assertEquals(
+        self.assertEqual(
             1, len(results['Panasonic-DMC-TS3']['listings']))
         self.assertNotIn('Sony_Cyber-shot_DSC-W310', results.keys())
-        self.assertEquals(2, len(results.keys()))
+        self.assertEqual(2, len(results.keys()))

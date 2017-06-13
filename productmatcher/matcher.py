@@ -69,12 +69,16 @@ def match_products_with_listings(products, listings):
     results = {}
 
     # Create a normalized version of the keys used in the matching process
+    # and group the products by manufacturer
+    products_by_manufacturer = {}
     for product in products:
-        normalize_keys(product, ['model', 'manufacturer'])
+        normalize_keys(product, ['model', 'manufacturer', 'product_name'])
+        products_by_manufacturer.setdefault(
+            product['normalized_manufacturer'], []).append(product)
 
     # Compute matching products and listings in parallel
     pool = Pool(cpu_count())
-    func = partial(match_products_with_listing, products)
+    func = partial(match_products_with_listing, products_by_manufacturer)
     matching_results = pool.map(func, listings)
 
     # Gather results
@@ -89,12 +93,13 @@ def match_products_with_listings(products, listings):
     return results
 
 
-def match_products_with_listing(products, listing):
+def match_products_with_listing(products_by_manufacturer, listing):
     # Create a copy of the listing with normalized keys because we don't
     # want the normalized keys to appear in the result
     normalized_listing = copy.copy(listing)
     normalize_keys(normalized_listing, ['title', 'manufacturer'])
-    product = find_matching_product(normalized_listing, products)
+    product = find_matching_product(
+        normalized_listing, products_by_manufacturer)
     # Return the match or None if none found
     return (product['product_name'], listing) if product else (None, None)
 
@@ -111,24 +116,27 @@ def normalize(s):
     return s.lower().strip()
 
 
-def find_matching_product(listing, products):
+def find_matching_product(listing, products_by_manufacturer):
     logger.info("Trying to find a match for '{listing_name}'".format(
         listing_name=listing['title']))
     matching_product = None
-
-    for product in products:
-        # Check if the manufacturer is identical and then check if the product
-        # model appears in the listing title
-        manufacturer_score = compute_manufacturer_match_score(listing, product)
-        if manufacturer_score > MINIMUM_MANUFACTURER_MATCH_SCORE and \
-                product['normalized_model'] in listing['normalized_title']:
-            matching_product = product
+    max_match_score = 0
+    for manufacturer, products in products_by_manufacturer.items():
+        # Check if the manufacturer is identical
+        s = SequenceMatcher(None,
+                            listing['normalized_manufacturer'],
+                            manufacturer)
+        if s.ratio() > MINIMUM_MANUFACTURER_MATCH_SCORE:
+            for product in products:
+                # Check that the product model appears in the listing title
+                if product['normalized_model'] in listing['normalized_title']:
+                    s = SequenceMatcher(None,
+                                        listing['normalized_title'],
+                                        product['normalized_product_name'])
+                    match_score = s.ratio()
+                    # Keep the most relevent matches
+                    if match_score > max_match_score:
+                        matching_product = product
+                        max_match_score = match_score
 
     return matching_product
-
-
-def compute_manufacturer_match_score(listing, product):
-    s = SequenceMatcher(None,
-                        listing['normalized_manufacturer'],
-                        product['normalized_manufacturer'])
-    return s.ratio()
